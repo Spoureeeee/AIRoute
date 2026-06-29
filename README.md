@@ -32,7 +32,6 @@ $$Score = w_T \frac{T}{T_{max}} + w_D \frac{D}{D_{max}} + w_A \frac{AQI}{AQI_{ma
 
 AQI data is fetched in real-time from **Malaysia's DOE APIMS network** (65 monitoring stations nationwide) via the AQICN API.
 
-Replace it with this instead:
 **Weight Normalisation**
 
 If the weights do not sum to 1, each is rescaled by dividing by the total:
