@@ -5,8 +5,6 @@
 
 AIRoute scores road routes using a weighted formula that balances **travel time**, **distance**, and **real-time air quality index (AQI)** — giving you the healthiest route, not just the fastest one.
 
-Built as a portfolio and competition seed project targeting **iNVENTX 2027 (MMU)**.
-
 ---
 
 ## 🎯 The Problem
@@ -102,7 +100,7 @@ AIRoute/
 
 ---
 
-## 🗺️ Roadmap — v2 (iNVENTX 2027 Target)
+## 🗺️ Roadmap — v2
 
 - [ ] OpenRouteService API integration — real road-based routing instead of straight lines
 - [ ] ML pollution prediction model trained on historical AQICN data
@@ -127,7 +125,7 @@ AIRoute/
 **Aflin Airil**
 Final Semester, Foundation in Engineering — MMU Cyberjaya
 Incoming: Bachelor of Engineering (Hons) in Computer Engineering
-YTM Future Leaders Scholar
+
 
 [GitHub](https://github.com/Spoureeeee) · [LinkedIn](https://www.linkedin.com/in/aflin-airil-35038230a/)
 
