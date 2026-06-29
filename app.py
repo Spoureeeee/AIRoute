@@ -1,28 +1,26 @@
 """
-AIRoute v1 - Week 3 Streamlit Dashboard
-=========================================
-What this does:
-  - Full web app: user selects origin + destination
-  - Fetches live AQI from Malaysia DOE stations
-  - Scores and ranks routes using your formula
-  - Displays ranked results + interactive Folium map
-  - User can adjust weights via sliders
+AIRoute v1.1 - Real Road Routing with OpenRouteService
+=======================================================
+Upgrades from v1:
+  - Real road-based routes via OpenRouteService API
+  - Actual travel time and distance from live routing engine
+  - Route lines follow real roads on the map (not straight lines)
 
 Run:
   streamlit run app.py
-
-Then open http://localhost:8501 in your browser.
 """
 
 import requests
 import folium
 import streamlit as st
 from streamlit.components.v1 import html as st_html
+import openrouteservice
 
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
 AQICN_TOKEN = "cdf4c16ae293758ae972a69c3604402f38490461"
+ORS_TOKEN   = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjQxOTQwNjU0OGEzMjQxMTNhMGM5ZDhkZTI2MWNkZDFlIiwiaCI6Im11cm11cjY0In0="
 
 # ─────────────────────────────────────────────
 # STATIONS
@@ -46,51 +44,35 @@ STATIONS = {
 }
 
 # ─────────────────────────────────────────────
-# ROUTES
+# ROUTE DEFINITIONS
+# ORS uses (longitude, latitude) order
 # ─────────────────────────────────────────────
-ROUTES = [
+CYBERJAYA  = (101.6559, 2.9213)
+KL_SENTRAL = (101.6841, 3.1319)
+
+ROUTE_CONFIGS = [
     {
         "name":      "Route A — Via Putrajaya (Highway)",
-        "time_min":  35,
-        "dist_km":   30,
         "stations":  ["Putrajaya", "KL Sentral"],
-        "waypoints": [
-            (2.9213, 101.6559),
-            (2.9264, 101.6964),
-            (3.0500, 101.7000),
-            (3.1319, 101.6841),
-        ],
+        "waypoints": [CYBERJAYA, (101.6964, 2.9264), KL_SENTRAL],
     },
     {
         "name":      "Route B — Via Petaling Jaya (Federal Highway)",
-        "time_min":  50,
-        "dist_km":   28,
         "stations":  ["Putrajaya", "Petaling Jaya", "KL Sentral"],
-        "waypoints": [
-            (2.9213, 101.6559),
-            (2.9264, 101.6964),
-            (3.1073, 101.6067),
-            (3.1319, 101.6841),
-        ],
+        "waypoints": [CYBERJAYA, (101.6964, 2.9264), (101.6067, 3.1073), KL_SENTRAL],
     },
     {
         "name":      "Route C — Direct Highway (ELITE + KL)",
-        "time_min":  40,
-        "dist_km":   35,
         "stations":  ["Putrajaya", "KL Sentral"],
-        "waypoints": [
-            (2.9213, 101.6559),
-            (3.0200, 101.6700),
-            (3.1000, 101.6750),
-            (3.1319, 101.6841),
-        ],
+        "waypoints": [CYBERJAYA, (101.6700, 3.0200), KL_SENTRAL],
     },
 ]
+
 
 # ─────────────────────────────────────────────
 # HELPER FUNCTIONS
 # ─────────────────────────────────────────────
-@st.cache_data(ttl=1800)   # Cache AQI for 30 minutes
+@st.cache_data(ttl=1800)
 def fetch_all_aqi():
     result = {}
     for name, info in STATIONS.items():
@@ -102,6 +84,47 @@ def fetch_all_aqi():
         except:
             result[name] = -1
     return result
+
+
+@st.cache_data(ttl=3600)
+def fetch_real_routes():
+    client = openrouteservice.Client(key=ORS_TOKEN)
+    routes = []
+
+    for config in ROUTE_CONFIGS:
+        try:
+            result = client.directions(
+                coordinates=config["waypoints"],
+                profile="driving-car",
+                format="geojson",
+            )
+            feature  = result["features"][0]
+            props    = feature["properties"]["segments"]
+            geometry = feature["geometry"]["coordinates"]
+
+            total_time_min = sum(s["duration"] for s in props) / 60
+            total_dist_km  = sum(s["distance"] for s in props) / 1000
+            folium_coords  = [(pt[1], pt[0]) for pt in geometry]
+
+            routes.append({
+                "name":     config["name"],
+                "stations": config["stations"],
+                "time_min": round(total_time_min, 1),
+                "dist_km":  round(total_dist_km, 1),
+                "geometry": folium_coords,
+            })
+
+        except Exception as e:
+            st.warning(f"ORS failed for {config['name']}: {e}. Using fallback.")
+            routes.append({
+                "name":     config["name"],
+                "stations": config["stations"],
+                "time_min": 35.0,
+                "dist_km":  30.0,
+                "geometry": [(pt[1], pt[0]) for pt in config["waypoints"]],
+            })
+
+    return routes
 
 
 def aqi_color(aqi):
@@ -144,11 +167,11 @@ def build_map(ranked, station_aqi_map):
     for i, route in enumerate(reversed(ranked)):
         rank = len(ranked) - 1 - i
         folium.PolyLine(
-            locations=route["waypoints"],
+            locations=route["geometry"],
             color=route_color(rank),
             weight=5,
             opacity=0.85,
-            tooltip=f"{rank_labels[rank]} | {route['name']}"
+            tooltip=f"{rank_labels[rank]} | {route['name']} | {route['time_min']} min | {route['dist_km']} km"
         ).add_to(m)
 
     for name, info in STATIONS.items():
@@ -188,6 +211,29 @@ def build_map(ranked, station_aqi_map):
         icon=folium.Icon(color="red", icon="flag", prefix="fa")
     ).add_to(m)
 
+    legend_html = """
+    <div style="position:fixed;bottom:30px;left:30px;z-index:1000;
+    background:white;padding:15px 20px;border-radius:10px;
+    box-shadow:0 2px 10px rgba(0,0,0,0.2);font-family:Arial,sans-serif;
+    font-size:13px;min-width:200px;">
+        <b style="font-size:14px;">AIRoute v1.1</b><br>
+        <small style="color:#666;">Real road routing via ORS</small>
+        <hr style="margin:8px 0;">
+        <b>Routes</b><br>
+        <span style="color:#00c853;">━━</span> 🥇 Healthiest<br>
+        <span style="color:#ff9800;">━━</span> 🥈 2nd Best<br>
+        <span style="color:#f44336;">━━</span> 🥉 3rd Best<br>
+        <hr style="margin:8px 0;">
+        <b>AQI Levels</b><br>
+        <span style="color:#00e400;">●</span> Good (0–50)<br>
+        <span style="color:#cccc00;">●</span> Moderate (51–100)<br>
+        <span style="color:#ff7e00;">●</span> Unhealthy (101–150)<br>
+        <span style="color:#ff0000;">●</span> Very Unhealthy (151–200)<br>
+        <hr style="margin:8px 0;">
+        <small style="color:#999;">Data: Malaysia DOE via AQICN</small>
+    </div>
+    """
+    m.get_root().html.add_child(folium.Element(legend_html))
     return m._repr_html_()
 
 
@@ -200,28 +246,24 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🛣️ AIRoute v1")
-st.caption("Health-aware route optimization using real-time Malaysia DOE air quality data")
+st.title("🛣️ AIRoute v1.1")
+st.caption("Health-aware route optimization · Real-time Malaysia DOE air quality · Real road routing via OpenRouteService")
 st.divider()
 
-# Sidebar — controls
 with st.sidebar:
     st.header("⚙️ Settings")
-
     st.subheader("Route")
-    origin = st.selectbox("Origin", ["Cyberjaya (MMU)"])
+    origin      = st.selectbox("Origin", ["Cyberjaya (MMU)"])
     destination = st.selectbox("Destination", ["KL Sentral"])
 
     st.subheader("Priority Weights")
-    st.caption("Adjust to match your preference. Values are normalised automatically.")
+    st.caption("Adjust to match your preference. Normalised automatically.")
     wT = st.slider("⏱️ Time", 0.0, 1.0, 0.33, 0.01)
     wD = st.slider("📏 Distance", 0.0, 1.0, 0.33, 0.01)
     wA = st.slider("🫁 Air Quality (AQI)", 0.0, 1.0, 0.34, 0.01)
 
-    # Normalise weights so they always sum to 1
     total = wT + wD + wA or 1
     wT, wD, wA = wT/total, wD/total, wA/total
-
     st.caption(f"Normalised → Time: {wT:.2f} | Distance: {wD:.2f} | AQI: {wA:.2f}")
 
     if st.button("🔄 Refresh AQI Data"):
@@ -229,32 +271,30 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
-    st.caption("Data refreshes every 30 minutes automatically.")
+    st.caption("AQI refreshes every 30 min. Routes cached 1 hour.")
     st.caption("Source: Malaysia DOE APIMS via AQICN")
 
-# Fetch AQI
-with st.spinner("Fetching live AQI from Malaysia DOE stations..."):
+with st.spinner("Fetching live AQI and real road routes..."):
     station_aqi_map = fetch_all_aqi()
+    routes          = fetch_real_routes()
 
-# Score routes
-for route in ROUTES:
+for route in routes:
     route["avg_aqi"] = calculate_route_aqi(route["stations"], station_aqi_map)
 
-T_max   = max(r["time_min"] for r in ROUTES)
-D_max   = max(r["dist_km"]  for r in ROUTES)
-AQI_max = max(r["avg_aqi"]  for r in ROUTES) or 1
+T_max   = max(r["time_min"] for r in routes)
+D_max   = max(r["dist_km"]  for r in routes)
+AQI_max = max(r["avg_aqi"]  for r in routes) or 1
 
-for route in ROUTES:
+for route in routes:
     route["score"] = score_route(
         route["time_min"], route["dist_km"], route["avg_aqi"],
         T_max, D_max, AQI_max, wT, wD, wA
     )
 
-ranked = sorted(ROUTES, key=lambda r: r["score"])
+ranked      = sorted(routes, key=lambda r: r["score"])
 rank_labels = ["🥇 Healthiest Route", "🥈 2nd Best", "🥉 3rd Best"]
 rank_colors = ["#e8f5e9", "#fff8e1", "#ffebee"]
 
-# Layout — two columns
 col1, col2 = st.columns([1, 1.8])
 
 with col1:
@@ -269,34 +309,33 @@ with col1:
     st.subheader("🏆 Route Rankings")
 
     for i, route in enumerate(ranked):
-        with st.container():
-            st.markdown(
-                f"""
-                <div style="background:{rank_colors[i]};padding:12px 16px;
-                border-radius:10px;margin-bottom:10px;">
-                <b>{rank_labels[i]}</b><br>
-                {route['name']}<br>
-                <small>
-                ⏱️ {route['time_min']} min &nbsp;|&nbsp;
-                📏 {route['dist_km']} km &nbsp;|&nbsp;
-                🫁 AQI {route['avg_aqi']:.0f} ({aqi_label(route['avg_aqi'])})<br>
-                Score: <b>{route['score']:.4f}</b>
-                </small>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+        st.markdown(
+            f"""
+            <div style="background:{rank_colors[i]};padding:12px 16px;
+            border-radius:10px;margin-bottom:10px;color:#111111;">
+            <b>{rank_labels[i]}</b><br>
+            {route['name']}<br>
+            <small>
+            ⏱️ {route['time_min']} min &nbsp;|&nbsp;
+            📏 {route['dist_km']} km &nbsp;|&nbsp;
+            🫁 AQI {route['avg_aqi']:.0f} ({aqi_label(route['avg_aqi'])})<br>
+            Score: <b>{route['score']:.4f}</b>
+            </small>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     st.divider()
     st.subheader("📐 Formula")
     st.latex(r"Score = w_T \frac{T}{T_{max}} + w_D \frac{D}{D_{max}} + w_A \frac{AQI}{AQI_{max}}")
-    st.caption("Lower score = better route. Weights are set in the sidebar.")
+    st.caption("Lower score = better route. Weights normalised to sum to 1.")
 
 with col2:
     st.subheader("🗺️ Interactive Map")
-    st.caption("Click station markers for AQI details. Hover routes for rankings.")
+    st.caption("Routes follow real roads. Click markers for AQI details. Hover routes for info.")
     map_html = build_map(ranked, station_aqi_map)
     st_html(map_html, height=520)
 
 st.divider()
-st.caption("AIRoute v1 — Built by Aflin Airil | MMU Cyberjaya | YTM Future Leaders Scholar | github.com/Spoureeeee/AIRoute")
+st.caption("AIRoute v1.1 — Built by Aflin Airil | MMU Cyberjaya | YTM Future Leaders Scholar | github.com/Spoureeeee/AIRoute")
