@@ -5,8 +5,6 @@
 
 AIRoute scores road routes using a weighted formula that balances **travel time**, **distance**, and **real-time air quality index (AQI)** — giving you the healthiest route, not just the fastest one.
 
-Built as a portfolio and competition seed project targeting **iNVENTX 2027 (MMU)**.
-
 ---
 
 ## 🎯 The Problem
@@ -19,7 +17,7 @@ AIRoute fills that gap.
 
 ## 🔬 How It Works
 
-AIRoute scores each route using this formula (from the original STEM project poster):
+AIRoute scores each route using this formula (from the original STEM project poster - Air Quality Monitoring System.jpg):
 
 $$Score = w_T \frac{T}{T_{max}} + w_D \frac{D}{D_{max}} + w_A \frac{AQI}{AQI_{max}}$$
 
@@ -33,6 +31,18 @@ $$Score = w_T \frac{T}{T_{max}} + w_D \frac{D}{D_{max}} + w_A \frac{AQI}{AQI_{ma
 **Lower score = better route.** The user controls the weights — a person with asthma would weight AQI heavily; someone in a rush would weight time heavily.
 
 AQI data is fetched in real-time from **Malaysia's DOE APIMS network** (65 monitoring stations nationwide) via the AQICN API.
+
+**Weight Normalisation**
+
+If the weights do not sum to 1, each is rescaled by dividing by the total:
+
+| Weight | Normalised Formula |
+|---|---|
+| w_T | w_T / (w_T + w_D + w_A) |
+| w_D | w_D / (w_T + w_D + w_A) |
+| w_A | w_A / (w_T + w_D + w_A) |
+
+This ensures weights always sum to 1 regardless of slider values, keeping the score formula mathematically valid.
 
 ---
 
@@ -102,7 +112,7 @@ AIRoute/
 
 ---
 
-## 🗺️ Roadmap — v2 (iNVENTX 2027 Target)
+## 🗺️ Roadmap — v2
 
 - [ ] OpenRouteService API integration — real road-based routing instead of straight lines
 - [ ] ML pollution prediction model trained on historical AQICN data
@@ -127,7 +137,7 @@ AIRoute/
 **Aflin Airil**
 Final Semester, Foundation in Engineering — MMU Cyberjaya
 Incoming: Bachelor of Engineering (Hons) in Computer Engineering
-YTM Future Leaders Scholar
+
 
 [GitHub](https://github.com/Spoureeeee) · [LinkedIn](https://www.linkedin.com/in/aflin-airil-35038230a/)
 
@@ -138,5 +148,3 @@ YTM Future Leaders Scholar
 MIT License — open for academic and non-commercial use.
 
 ---
-
-*AIRoute v1 — built in 2 hours as a proof of concept. iNVENTX 2027, we're coming.*
