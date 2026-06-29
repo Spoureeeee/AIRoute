@@ -148,5 +148,3 @@ Incoming: Bachelor of Engineering (Hons) in Computer Engineering
 MIT License — open for academic and non-commercial use.
 
 ---
-
-*AIRoute v1 — built in 2 hours as a proof of concept. iNVENTX 2027, we're coming.*
