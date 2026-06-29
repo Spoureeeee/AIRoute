@@ -17,7 +17,7 @@ AIRoute fills that gap.
 
 ## 🔬 How It Works
 
-AIRoute scores each route using this formula (from the original STEM project poster):
+AIRoute scores each route using this formula (from the original STEM project poster - Air Quality Monitoring System.jpg):
 
 $$Score = w_T \frac{T}{T_{max}} + w_D \frac{D}{D_{max}} + w_A \frac{AQI}{AQI_{max}}$$
 
