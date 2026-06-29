@@ -32,10 +32,18 @@ $$Score = w_T \frac{T}{T_{max}} + w_D \frac{D}{D_{max}} + w_A \frac{AQI}{AQI_{ma
 
 AQI data is fetched in real-time from **Malaysia's DOE APIMS network** (65 monitoring stations nationwide) via the AQICN API.
 
-Weight Normalisation
-When the sum of weights exceeds 1, each weight is normalised by dividing by the total:
-wT′=wTwT+wD+wA,wD′=wDwT+wD+wA,wA′=wAwT+wD+wAw_T' = \frac{w_T}{w_T + w_D + w_A}, \quad w_D' = \frac{w_D}{w_T + w_D + w_A}, \quad w_A' = \frac{w_A}{w_T + w_D + w_A}wT′​=wT​+wD​+wA​wT​​,wD′​=wT​+wD​+wA​wD​​,wA′​=wT​+wD​+wA​wA​​
-This ensures weights always sum to 1 regardless of slider values, keeping the score mathematically valid.
+Replace it with this instead:
+**Weight Normalisation**
+
+If the weights do not sum to 1, each is rescaled by dividing by the total:
+
+| Weight | Normalised Formula |
+|---|---|
+| w_T | w_T / (w_T + w_D + w_A) |
+| w_D | w_D / (w_T + w_D + w_A) |
+| w_A | w_A / (w_T + w_D + w_A) |
+
+This ensures weights always sum to 1 regardless of slider values, keeping the score formula mathematically valid.
 
 ---
 
